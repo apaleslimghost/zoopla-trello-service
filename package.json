@@ -1,0 +1,11 @@
+{
+  "name": "zoopla-trello-lambda",
+  "devDependencies": {
+    "node-lambda": "^0.7.1"
+  },
+  "scripts": {
+    "start": "node-lambda run",
+    "setup": "node-lambda setup",
+    "deploy": "node-lambda deploy"
+  }
+}
