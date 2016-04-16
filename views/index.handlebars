@@ -26,6 +26,10 @@ appKey = {{{stringify trelloAppKey}}}
 				)
 			);
 		},
+		clear() {
+			localStorage.clear();
+			this.listener();
+		},
 		onchange(listener) {
 			this.listener = listener;
 		}
