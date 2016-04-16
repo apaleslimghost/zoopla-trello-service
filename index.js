@@ -26,7 +26,10 @@ app.post('/_submit', multipart(), (req, res, next) => {
 		userToken: req.body.auth,
 	})
 	.then(card => res.json(card))
-	.catch(next);
+	.catch(error => {
+		res.status(400);
+		res.json({error: error.message});
+	});
 })
 
 app.listen(3000);

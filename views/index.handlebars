@@ -1,7 +1,7 @@
 <!doctype html>
 <title>Zoopla → Trello</title>
 
-<div class="loading"></div>
+<div class="loading global-loading"></div>
 <main></main>
 
 <script>
@@ -33,17 +33,22 @@ input:focus::-webkit-input-placeholder {
 }
 
 .loading {
-	position: absolute;
-	left: 50%;
-	top: 10%;
-	margin-left: -10px;
+
 	width: 20px;
 	height: 20px;
-	border: 2px #555 solid;
+	color: #555;
+	border: 2px solid;
 	border-left-style: none;
 	border-radius: 20px;
 	animation: rotate 1s linear infinite;
 	transition: opacity 0.1s;
+}
+
+.global-loading {
+	position: absolute;
+	left: 50%;
+	top: 10%;
+	margin-left: -10px;
 }
 
 body {
@@ -140,7 +145,7 @@ input:focus {
 	outline: none;
 }
 
-input, .btn, select {
+input, .btn, select, button {
 	transition-property: background border color;
 	transition-duration: 0.2s;
 	font: inherit;
@@ -158,6 +163,20 @@ input, .btn, select {
 .card-list a {
 	display:inline-block;
 	padding: 0.25em;
+}
+
+.error {
+	color: #b1493f;
+}
+
+button .loading {
+	color: inherit;
+}
+
+[disabled] {
+	opacity: 0.75;
+	pointer-events: none;
+	cursor: not-allowed;
 }
 </style>
 
@@ -226,28 +245,51 @@ input, .btn, select {
 	var getBoards = trelloFetch('members/me/boards');
 	var getLists  = trelloFetch(boardId => `boards/${boardId}/lists`);
 
+	withVal = function(fn) {
+		return ev => ev.currentTarget.value && fn(ev.currentTarget.value);
+	}
+
 	setStorage = function(key) {
-		return ev => ev.currentTarget.value && store.set(key, ev.currentTarget.value);
+		return val => store.set(key, val);
 	};
 
-	formFetch = function(setter) {
+	formFetch = function(onsuccess, onerror) {
 		return ev => {
+			document.querySelector('.error').classList.add('hide');
 			var form = ev.currentTarget;
+			var button = form.querySelector('[type=submit]');
+			var origButtonContent = button.innerHTML;
+			button.innerHTML = '<div class="loading"></div>';
+			button.disabled = true;
+
 			ev.preventDefault();
 			fetch(form.action || '/', {
 				method: form.method,
 				body: new FormData(form)
-			}).then(r => r.json()).then(result => setter(result));
+			})
+			.then(r => r.ok ? r.json() : r.json().then(e => {throw new Error(e.error)}))
+			.then(result => onsuccess(result))
+			.catch(e => onerror(e.message))
+			.then(() => {
+				button.disabled = false;
+				button.innerHTML = origButtonContent;
+			});
 		}
-	}
+	};
 
 	appendStorage = function(key) {
 		return val => {
 			store.set(key, (store.get(key) || []).concat(val));
 		}
+	};
+
+	error = function(msg) {
+		var err = document.querySelector('.error');
+		err.classList.remove('hide');
+		err.textContent = msg;
 	}
 
-	var renderSelect = (key, label) => list => `<select onChange="setStorage('${key}')(event)">
+	var renderSelect = (key, label) => list => `<select onChange="withVal(setStorage('${key}'))(event)">
 		<option>Select a ${label}...</option>
 		${list.map(item => `<option value="${item.id}" label="${item.name}">${item.name}</option>`).join('\n')}
 	</select>`;
@@ -260,23 +302,25 @@ input, .btn, select {
 		  !data.trelloAuth ? `<a class="btn btn-blue" href="${authUrl}">Log in to Trello</a>`
 		: !data.boardId    ? getBoards().then(boards => boards.filter(board => !board.closed)).then(renderSelect('boardId', 'board'))
 		: !data.listId     ? getLists(data.boardId).then(renderSelect('listId', 'list'))
-		: `<form method="post" action="/_submit" onsubmit="formFetch(appendStorage('cards'))(event)">
+		: `<form method="post" action="/_submit" onsubmit="formFetch(appendStorage('cards'), error)(event)">
 			<input type="hidden" name="auth" value="${data.trelloAuth}">
 			<input type="hidden" name="list" value="${data.listId}">
 			<label for="property">Zoopla property</label>
 			<div class="input-group">
-				<input class="input-group-flex" type="text" name="property" placeholder="http://www.zoopla.co.uk/for-sale/details/12345678">
-				<input type="submit" value="Add to Trello">
+				<input required class="input-group-flex" type="text" name="property" placeholder="http://www.zoopla.co.uk/for-sale/details/12345678">
+				<button type="submit">Add to Trello</button>
 			</div>
-		</form>${renderCards(data.cards)}`;
+			<div class="error hide"></div>
+		</form>
+		${renderCards(data.cards)}`;
 
 	var setContent = html => {
-		document.querySelector('.loading').classList.add('hide');
+		document.querySelector('.global-loading').classList.add('hide');
 		document.querySelector('main').innerHTML = html;
 	}
 
 	var render = () => {
-		document.querySelector('.loading').classList.remove('hide');
+		document.querySelector('.global-loading').classList.remove('hide');
 		return Promise.resolve(store.get()).then(template)
 		.then(setContent)
 		.catch(err => setContent(`<pre style="color:darkred">${err.stack}</pre>`))
