@@ -4,6 +4,9 @@
 <div class="loading global-loading"></div>
 <main></main>
 
+<script src="https://cdn.polyfill.io/v2/polyfill.min.js?features=fetch"></script>
+<script src="https://cdn.rawgit.com/WebReflection/url-search-params/master/build/url-search-params.js"></script>
+
 <script>
 appKey = {{{stringify trelloAppKey}}}
 </script>
@@ -112,17 +115,20 @@ a[target=_blank]::after {
 	flex: 1;
 }
 
-.input-group input {
+.input-group input,
+.input-group button {
 	border-radius: 0;
 	margin-right: -1px;
 }
 
-.input-group input:first-child {
+.input-group input:first-child,
+.input-group button:first-child  {
 	border-top-left-radius: 2px;
 	border-bottom-left-radius: 2px;
 }
 
-.input-group input:last-child {
+.input-group input:last-child,
+.input-group button:last-child {
 	border-top-right-radius: 2px;
 	border-bottom-right-radius: 2px;
 }
@@ -182,16 +188,18 @@ button .loading {
 
 <script>
 	var store = {
-		listener() {},
-		get(key) {
+		listener: function() {},
+		get: function(key) {
 			return key ?
 				(localStorage[key] && JSON.parse(localStorage[key])) :
 				Object.keys(localStorage).reduce(
-					(obj, key) => (obj[key] = this.get(key), obj),
-					{}
+					function(obj, key) {
+						obj[key] = this.get(key)
+						return obj;
+					}.bind(this), {}
 				);
 		},
-		set(key, val) {
+		set: function(key, val) {
 			this.listener(
 				key, this.get(key), (
 					localStorage[key] = JSON.stringify(val),
@@ -199,24 +207,26 @@ button .loading {
 				)
 			);
 		},
-		clear() {
+		clear: function() {
 			localStorage.clear();
 			this.listener();
 		},
-		onchange(listener) {
+		onchange: function(listener) {
 			this.listener = listener;
 		}
 	};
 
-	window.addEventListener('storage', ev => store.listener(ev.key, ev.oldValue, ev.newValue));
+	window.addEventListener('storage', function(ev) { store.listener(ev.key, ev.oldValue, ev.newValue) });
 
 	var trelloBase = new URL('https://trello.com/1/');
-	var objToQuery = obj => Object.keys(obj).reduce(
-		(search, key) => (search.set(key, obj[key]), search),
-		new URLSearchParams()
-	).toString();
+	var objToQuery = function(obj) { return Object.keys(obj).reduce(
+		function(search, key) {
+			search.set(key, obj[key])
+			return search;
+		}, new URLSearchParams()
+	).toString() };
 
-	var trelloUrl = (path, query) => new URL(path + '?' + objToQuery(query), trelloBase).toString();
+	var trelloUrl = function(path, query) { return new URL(path + '?' + objToQuery(query), trelloBase).toString() };
 
 	var authUrl = trelloUrl('authorize', {
 		key: appKey,
@@ -232,29 +242,32 @@ button .loading {
 
 		if(typeof url === 'string') {
 			var urlString = url;
-			url = () => urlString;
+			url = function() { return urlString };
 		}
 
-		return (...args) => {
+		return function() {
 			query.key = appKey;
 			query.token = store.get('trelloAuth');
-			return fetch(trelloUrl(url(...args), query)).then(r => r.json());
+			return fetch(trelloUrl(url.apply(null, arguments), query))
+				.then(function(r) { return r.json() });
 		}
 	}
 
 	var getBoards = trelloFetch('members/me/boards');
-	var getLists  = trelloFetch(boardId => `boards/${boardId}/lists`);
+	var getLists  = trelloFetch(function(boardId) {return `boards/${boardId}/lists`});
 
 	withVal = function(fn) {
-		return ev => ev.currentTarget.value && fn(ev.currentTarget.value);
+		return function(ev) {
+			if(ev.currentTarget.value) fn(ev.currentTarget.value);
+		};
 	}
 
 	setStorage = function(key) {
-		return val => store.set(key, val);
+		return function(val) { store.set(key, val) };
 	};
 
 	formFetch = function(onsuccess, onerror) {
-		return ev => {
+		return function(ev) {
 			document.querySelector('.error').classList.add('hide');
 			var form = ev.currentTarget;
 			var button = form.querySelector('[type=submit]');
@@ -267,10 +280,13 @@ button .loading {
 				method: form.method,
 				body: new FormData(form)
 			})
-			.then(r => r.ok ? r.json() : r.json().then(e => {throw new Error(e.error)}))
-			.then(result => onsuccess(result))
-			.catch(e => onerror(e.message))
-			.then(() => {
+			.then(function(r) {
+				if(r.ok) return r.json();
+				return r.json().then(function(e) {throw new Error(e.error)})
+			})
+			.then(function(result) { return onsuccess(result) })
+			.catch(function(e) { return onerror(e.message) })
+			.then(function () {
 				button.disabled = false;
 				button.innerHTML = origButtonContent;
 			});
@@ -278,7 +294,7 @@ button .loading {
 	};
 
 	appendStorage = function(key) {
-		return val => {
+		return function(val) {
 			store.set(key, (store.get(key) || []).concat(val));
 		}
 	};
@@ -289,18 +305,18 @@ button .loading {
 		err.textContent = msg;
 	}
 
-	var renderSelect = (key, label) => list => `<select onChange="withVal(setStorage('${key}'))(event)">
+	function renderSelect(key, label) { return function(list) { return `<select onChange="withVal(setStorage('${key}'))(event)">
 		<option>Select a ${label}...</option>
-		${list.map(item => `<option value="${item.id}" label="${item.name}">${item.name}</option>`).join('\n')}
-	</select>`;
+		${list.map(function(item) { return `<option value="${item.id}" label="${item.name}">${item.name}</option>`}).join('\n')}
+	</select>`}};
 
-	var renderCards = cards => `<ul class="card-list">${(cards || [])
-		.map(card => `<li><a href="${card.url}" target="_blank">${card.name} </a>`)
-		.join('\n')}</ul`;
+	function renderCards(cards) { return `<ul class="card-list">${(cards || [])
+		.map(function(card) { return `<li><a href="${card.url}" target="_blank">${card.name} </a>`})
+		.join('\n')}</ul`};
 
-	var template = data =>
+	function template(data) { return (
 		  !data.trelloAuth ? `<a class="btn btn-blue" href="${authUrl}">Log in to Trello</a>`
-		: !data.boardId    ? getBoards().then(boards => boards.filter(board => !board.closed)).then(renderSelect('boardId', 'board'))
+		: !data.boardId    ? getBoards().then(function(boards) { return boards.filter(function(board) { return !board.closed})}).then(renderSelect('boardId', 'board'))
 		: !data.listId     ? getLists(data.boardId).then(renderSelect('listId', 'list'))
 		: `<form method="post" action="/_submit" onsubmit="formFetch(appendStorage('cards'), error)(event)">
 			<input type="hidden" name="auth" value="${data.trelloAuth}">
@@ -312,23 +328,25 @@ button .loading {
 			</div>
 			<div class="error hide"></div>
 		</form>
-		${renderCards(data.cards)}`;
+		${renderCards(data.cards)}` )};
 
-	var setContent = html => {
+	function setContent(html) {
 		document.querySelector('.global-loading').classList.add('hide');
 		document.querySelector('main').innerHTML = html;
 	}
 
-	var showError = msg => setContent(`<pre style="color:darkred">${msg}</pre>`);
+	function showError(msg) {
+		setContent(`<pre style="color:darkred">${msg}</pre>`);
+	}
 
-	var render = () => {
+	function render() {
 		document.querySelector('.global-loading').classList.remove('hide');
 		return Promise.resolve(store.get()).then(template)
 		.then(setContent)
-		.catch(err => showError(err.stack))
+		.catch(function(err) {showError(err.stack)})
 	};
 
-	var main = () => {
+	function main() {
 		render();
 		store.onchange(render);
 		window.onerror = showError;
