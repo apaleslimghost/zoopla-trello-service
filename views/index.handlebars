@@ -1,0 +1,97 @@
+<!doctype html>
+<title>Zoopla → Trello</title>
+
+<main></main>
+<iframe id="formtarget" width="100%" height="600" seamless></iframe>
+
+<script>
+appKey = {{{stringify trelloAppKey}}}
+</script>
+
+<script>
+	var store = {
+		listener() {},
+		get(key) {
+			return key ? localStorage[key] : localStorage;
+		},
+		set(key, val) {
+			this.listener(key, localStorage[key], localStorage[key] = val);
+		},
+		onchange(listener) {
+			this.listener = listener;
+		}
+	};
+
+	window.addEventListener('storage', ev => store.listener(ev.key, ev.oldValue, ev.newValue));
+
+	var trelloBase = new URL('https://trello.com/1/');
+	var objToQuery = obj => Object.keys(obj).reduce(
+		(search, key) => (search.set(key, obj[key]), search),
+		new URLSearchParams()
+	).toString();
+
+	var trelloUrl = (path, query) => new URL(path + '?' + objToQuery(query), trelloBase).toString();
+
+	var authUrl = trelloUrl('authorize', {
+		key: appKey,
+		name: 'Zoopla → Trello',
+		response_type: 'token',
+		scope: 'read,write',
+		callback_method: 'fragment',
+		return_url: location.href,
+	});
+
+	function trelloFetch(url, query) {
+		query = query || {};
+
+		if(typeof url === 'string') {
+			var urlString = url;
+			url = () => urlString;
+		}
+
+		return (...args) => {
+			query.key = appKey;
+			query.token = store.get('trelloAuth');
+			return fetch(trelloUrl(url(...args), query)).then(r => r.json());
+		}
+	}
+
+	var getBoards = trelloFetch('members/me/boards');
+	var getLists  = trelloFetch(boardId => `boards/${boardId}/lists`);
+
+	setStorage = function(key) {
+		return ev => ev.currentTarget.value && store.set(key, ev.currentTarget.value);
+	};
+
+	var renderSelect = key => list => `<select onChange="setStorage('${key}')(event)">
+		<option></option>
+		${list.map(item => `<option value="${item.id}" label="${item.name}">${item.name}</option>`).join('\n')}
+	</select>`;
+
+	var template = data => (console.log(data),
+		  !data.trelloAuth ? `<a class="btn" href="${authUrl}">Log in to Trello</a>`
+		: !data.boardId    ? getBoards().then(boards => boards.filter(board => !board.closed)).then(renderSelect('boardId'))
+		: !data.listId     ? getLists(data.boardId).then(renderSelect('listId'))
+		: `<form method="post" action="/_submit" target="">
+			<input type="hidden" name="auth" value="${data.trelloAuth}">
+			<input type="hidden" name="list" value="${data.listId}">
+			<label>Zoopla property <input type="text" name="property" placeholder="http://www.zoopla.co.uk/for-sale/details/12345678"></label>
+			<input type="submit" value="Add to Trello">
+		</form>`);
+
+	var render = () => Promise.resolve(store.get()).then(template)
+		.then(html => document.querySelector('main').innerHTML = html)
+		.catch(err => document.querySelector('main').innerHTML = `<pre style="color:darkred">${err.stack}</pre>`);
+
+	var main = () => {
+		render();
+		store.onchange(render);
+
+		if(location.hash) {
+			var token = new URLSearchParams(location.hash.substr(1)).get('token');
+			store.set('trelloAuth', token);
+		}
+	};
+
+	main();
+</script>
