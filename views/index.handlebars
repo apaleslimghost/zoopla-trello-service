@@ -319,16 +319,19 @@ button .loading {
 		document.querySelector('main').innerHTML = html;
 	}
 
+	var showError = msg => setContent(`<pre style="color:darkred">${msg}</pre>`);
+
 	var render = () => {
 		document.querySelector('.global-loading').classList.remove('hide');
 		return Promise.resolve(store.get()).then(template)
 		.then(setContent)
-		.catch(err => setContent(`<pre style="color:darkred">${err.stack}</pre>`))
+		.catch(err => showError(err.stack))
 	};
 
 	var main = () => {
 		render();
 		store.onchange(render);
+		window.onerror = showError;
 
 		if(location.hash) {
 			var token = new URLSearchParams(location.hash.substr(1)).get('token');
