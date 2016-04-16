@@ -2,7 +2,6 @@
 <title>Zoopla → Trello</title>
 
 <main></main>
-<iframe id="formtarget" width="100%" height="600" seamless></iframe>
 
 <script>
 appKey = {{{stringify trelloAppKey}}}
@@ -12,10 +11,20 @@ appKey = {{{stringify trelloAppKey}}}
 	var store = {
 		listener() {},
 		get(key) {
-			return key ? localStorage[key] : localStorage;
+			return key ?
+				(localStorage[key] && JSON.parse(localStorage[key])) :
+				Object.keys(localStorage).reduce(
+					(obj, key) => (obj[key] = this.get(key), obj),
+					{}
+				);
 		},
 		set(key, val) {
-			this.listener(key, localStorage[key], localStorage[key] = val);
+			this.listener(
+				key, this.get(key), (
+					localStorage[key] = JSON.stringify(val),
+					this.get(key)
+				)
+			);
 		},
 		onchange(listener) {
 			this.listener = listener;
@@ -63,21 +72,42 @@ appKey = {{{stringify trelloAppKey}}}
 		return ev => ev.currentTarget.value && store.set(key, ev.currentTarget.value);
 	};
 
+	formFetch = function(setter) {
+		return ev => {
+			var form = ev.currentTarget;
+			ev.preventDefault();
+			fetch(form.action || '/', {
+				method: form.method,
+				body: new FormData(form)
+			}).then(r => r.json()).then(result => setter(result));
+		}
+	}
+
+	appendStorage = function(key) {
+		return val => {
+			store.set(key, (store.get(key) || []).concat(val));
+		}
+	}
+
 	var renderSelect = key => list => `<select onChange="setStorage('${key}')(event)">
 		<option></option>
 		${list.map(item => `<option value="${item.id}" label="${item.name}">${item.name}</option>`).join('\n')}
 	</select>`;
 
-	var template = data => (console.log(data),
+	var renderCards = cards => `<ul>${(cards || [])
+		.map(card => `<li><a href="${card.url}" target="_blank">${card.name} ⎋</a>`)
+		.join('\n')}</ul`;
+
+	var template = data =>
 		  !data.trelloAuth ? `<a class="btn" href="${authUrl}">Log in to Trello</a>`
 		: !data.boardId    ? getBoards().then(boards => boards.filter(board => !board.closed)).then(renderSelect('boardId'))
 		: !data.listId     ? getLists(data.boardId).then(renderSelect('listId'))
-		: `<form method="post" action="/_submit" target="">
+		: `<form method="post" action="/_submit" onsubmit="formFetch(appendStorage('cards'))(event)">
 			<input type="hidden" name="auth" value="${data.trelloAuth}">
 			<input type="hidden" name="list" value="${data.listId}">
 			<label>Zoopla property <input type="text" name="property" placeholder="http://www.zoopla.co.uk/for-sale/details/12345678"></label>
 			<input type="submit" value="Add to Trello">
-		</form>`);
+		</form>${renderCards(data.cards)}`;
 
 	var render = () => Promise.resolve(store.get()).then(template)
 		.then(html => document.querySelector('main').innerHTML = html)

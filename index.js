@@ -1,6 +1,6 @@
 var zooplaTrello = require('zoopla-trello');
 var express = require('express');
-var bodyParser = require('body-parser');
+var multipart = require('connect-multiparty');
 var logger = require('morgan');
 
 var app = express();
@@ -19,7 +19,7 @@ app.get('/', (req, res) => {
 	res.render('index', {trelloAppKey: process.env.TRELLO_APP_KEY});
 });
 
-app.post('/_submit', bodyParser.urlencoded({extended: false}), (req, res, next) => {
+app.post('/_submit', multipart(), (req, res, next) => {
 	zooplaTrello(req.body.property, {
 		applicationKey: process.env.TRELLO_APP_KEY,
 		listId: req.body.list,
