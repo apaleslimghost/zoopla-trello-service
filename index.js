@@ -2,6 +2,7 @@ var zooplaTrello = require('zoopla-trello');
 var express = require('express');
 var multipart = require('connect-multiparty');
 var logger = require('morgan');
+var favicon = require('serve-favicon');
 
 var app = express();
 app.engine('handlebars', require('express-handlebars')({
@@ -14,6 +15,7 @@ app.engine('handlebars', require('express-handlebars')({
 app.set('view engine', 'handlebars');
 
 app.use(logger('dev'));
+app.use(favicon(__dirname + '/favicon.ico'));
 
 app.get('/', (req, res) => {
 	res.render('index', {trelloAppKey: process.env.TRELLO_APP_KEY});
