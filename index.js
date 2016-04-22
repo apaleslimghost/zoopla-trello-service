@@ -16,7 +16,7 @@ app.set('view engine', 'handlebars');
 app.use(logger('dev'));
 
 app.get('/', (req, res) => {
-	res.render('index', {trelloAppKey: process.env.TRELLO_APP_KEY});
+	res.render('index', {trelloAppKey: process.env.TRELLO_APP_KEY, googleMapsKey: process.env.GOOGLE_API_KEY});
 });
 
 app.post('/_submit', multipart(), (req, res, next) => {
