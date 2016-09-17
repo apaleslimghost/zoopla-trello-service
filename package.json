@@ -10,7 +10,7 @@
     "express-handlebars": "^3.0.0",
     "morgan": "^1.7.0",
     "serve-favicon": "^2.3.0",
-    "zoopla-trello": "^1.1.0"
+    "zoopla-trello": "^1.1.1"
   },
   "scripts": {
     "start": "nodemon -r dotenv/config index.js"

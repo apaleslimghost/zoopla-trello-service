@@ -1,4 +1,4 @@
-<!doctype html>
+{{!-- <!doctype html> --}}
 <title>Zoopla → Trello</title>
 
 <div class="loading global-loading"></div>
@@ -32,7 +32,6 @@ input:focus::-webkit-input-placeholder {
 }
 
 .loading {
-
 	width: 20px;
 	height: 20px;
 	color: #555;
@@ -66,6 +65,9 @@ main {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
+	max-height: 100%;
+	padding: 10px;
+	overflow-y: auto;
 }
 
 html, body {
@@ -180,6 +182,13 @@ button .loading {
 	pointer-events: none;
 	cursor: not-allowed;
 }
+
+.logged-out {
+	font-size: 0.8em;
+	text-align: center;
+	max-width: 240px;
+	margin: 1em auto;
+}
 </style>
 
 <script>
@@ -202,6 +211,12 @@ button .loading {
 					this.get(key)
 				)
 			);
+		},
+		delete: function(key) {
+			this.listener(key, this.get(key), (
+				localStorage.removeItem(key),
+				undefined
+			));
 		},
 		clear: function() {
 			localStorage.clear();
@@ -245,7 +260,8 @@ button .loading {
 			query.key = appKey;
 			query.token = store.get('trelloAuth');
 			return fetch(trelloUrl(url.apply(null, arguments), query))
-				.then(function(r) { return r.json() });
+				.then(function(r) { return r.json() })
+				.catch(console.error.bind(console));
 		}
 	}
 
@@ -265,7 +281,7 @@ button .loading {
 	formFetch = function(onsuccess, onerror) {
 		return function(ev) {
 			document.querySelector('.error').classList.add('hide');
-			var form = ev.currentTarget;
+			var form = ev.target;
 			var button = form.querySelector('[type=submit]');
 			var origButtonContent = button.innerHTML;
 			button.innerHTML = '<div class="loading"></div>';
@@ -280,7 +296,7 @@ button .loading {
 				if(r.ok) return r.json();
 				return r.json().then(function(e) {throw new Error(e.error)})
 			})
-			.then(function(result) { return onsuccess(result) })
+			.then(function(result) { console.log(result); return onsuccess(result) })
 			.catch(function(e) { return onerror(e.message) })
 			.then(function () {
 				button.disabled = false;
@@ -296,6 +312,11 @@ button .loading {
 	};
 
 	error = function(msg) {
+		if(msg === 'invalid token') {
+			store.delete('trelloAuth');
+			store.set('loggedOut', true);
+		}
+
 		var err = document.querySelector('.error');
 		err.classList.remove('hide');
 		err.textContent = msg;
@@ -307,11 +328,13 @@ button .loading {
 	</select>`}};
 
 	function renderCards(cards) { return `<ul class="card-list">${(cards || [])
+		.reverse()
 		.map(function(card) { return `<li><a href="${card.url}" target="_blank">${card.name} </a>`})
 		.join('\n')}</ul`};
 
 	function template(data) { return (
-		  !data.trelloAuth ? `<a class="btn btn-blue" href="${authUrl}">Log in to Trello</a>`
+		  !data.trelloAuth ? `<a class="btn btn-blue" href="${authUrl}">Log in to Trello</a>
+			${data.loggedOut ? '<div class="logged-out">You\'ve not used Zoopla → Trello in a while, so Trello has logged you out. Please log in and try again.</div>' : ''}`
 		: !data.boardId    ? getBoards().then(function(boards) { return boards.filter(function(board) { return !board.closed})}).then(renderSelect('boardId', 'board'))
 		: !data.listId     ? getLists(data.boardId).then(renderSelect('listId', 'list'))
 		: `<form method="post" action="/_submit" onsubmit="formFetch(appendStorage('cards'), error)(event)">
@@ -350,6 +373,7 @@ button .loading {
 		if(location.hash) {
 			var token = new URLSearchParams(location.hash.substr(1)).get('token');
 			store.set('trelloAuth', token);
+			store.delete('loggedOut');
 			location.hash = '';
 		}
 	};

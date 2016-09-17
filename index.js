@@ -22,13 +22,16 @@ app.get('/', (req, res) => {
 });
 
 app.post('/_submit', multipart(), (req, res, next) => {
+	console.log(req.body);
 	zooplaTrello(req.body.property, {
 		applicationKey: process.env.TRELLO_APP_KEY,
 		googleMapsKey: process.env.GOOGLE_API_KEY,
 		listId: req.body.list,
 		userToken: req.body.auth,
 	})
-	.then(card => res.json(card))
+	.then(card => {
+		res.json(card);
+	})
 	.catch(error => {
 		res.status(400);
 		res.json({error: error.message});
